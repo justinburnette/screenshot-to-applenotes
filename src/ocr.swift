@@ -61,6 +61,66 @@ guard !lines.isEmpty else {
 // height and scrambles reading order -- confirmed by testing against a
 // multi-pane IDE screenshot.
 
+// Some renderers (e.g. e-textbook readers with inline hyperlinked citations
+// or glossary terms) draw a small icon glyph right after a linked span. That
+// occasionally makes Vision split ONE visual line into 2-3 separate
+// observations sitting on the same row (near-identical y, sequential x)
+// instead of returning it as one -- confirmed against real screenshots via
+// bounding-box dumps (e.g. "...Chapters 10" + "• and 11" both at y~0.18,
+// the "•" being Vision's misread of the icon). Glue same-row fragments back
+// into one line *before* paragraph reflow, using vertical overlap plus a
+// horizontal gap capped well below a typical multi-pane column gutter, so
+// side-by-side panes from the regression above are never merged this way.
+func mergeSameRowFragments(_ lines: [Line]) -> [Line] {
+    guard lines.count > 1 else { return lines }
+    let medianHeight = lines.map { $0.box.height }.sorted()[lines.count / 2]
+    let maxRowGap = min(0.04, max(0.02, 2.0 * medianHeight))
+    // How far (vertically) to look when deciding whether "no wide line near
+    // this row" applies -- scoped to nearby rows rather than the whole image,
+    // so an unrelated wide line elsewhere on the page (a different paragraph,
+    // or a maximized pane far from this one) can't disable the guard for a
+    // genuine side-by-side split happening here.
+    let localYRange = 5.0 * medianHeight
+
+    var merged: [Line] = [lines[0]]
+    for current in lines.dropFirst() {
+        let previous = merged[merged.count - 1]
+        let overlapY = max(0, min(previous.box.maxY, current.box.maxY) - max(previous.box.minY, current.box.minY))
+        let yOverlapRatio = overlapY / min(previous.box.height, current.box.height)
+        let xGap = current.box.minX - previous.box.maxX
+        let unionWidth = max(previous.box.maxX, current.box.maxX) - min(previous.box.minX, current.box.minX)
+        let rowMidY = (previous.box.midY + current.box.midY) / 2
+        let localMaxWidth = lines
+            .filter { abs($0.box.midY - rowMidY) <= localYRange }
+            .map { $0.box.width }
+            .max() ?? 0
+
+        let sameRowSplit = yOverlapRatio >= 0.55
+            && current.box.minX >= previous.box.minX - 0.005
+            && current.box.maxX > previous.box.maxX
+            && xGap >= -0.5 * medianHeight
+            && xGap <= maxRowGap
+            && !(localMaxWidth < 0.70 && unionWidth > localMaxWidth * 1.35)
+
+        if sameRowSplit {
+            // A lone bullet-like glyph at the start of a same-row fragment is
+            // Vision misreading the icon itself, not real list content --
+            // a real list bullet starts a whole line/paragraph, never a
+            // mid-sentence continuation like this.
+            var text = current.text
+            for marker in ["\u{2022} ", "\u{00B7} ", "\u{2023} "] where text.hasPrefix(marker) {
+                text.removeFirst(marker.count)
+            }
+            merged[merged.count - 1] = Line(text: previous.text + " " + text, box: previous.box.union(current.box))
+        } else {
+            merged.append(current)
+        }
+    }
+    return merged
+}
+
+lines = mergeSameRowFragments(lines)
+
 // Reflow wrapped lines into paragraphs. A line only continues the previous
 // one when the previous line runs nearly the full observed column width
 // (i.e. it wrapped at the margin, rather than ending by choice) and the gap
