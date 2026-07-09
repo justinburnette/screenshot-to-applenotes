@@ -152,17 +152,32 @@ for i in 1..<lines.count {
     }
 }
 
-// Strip in-text citations like "(Perosa, 1996)" or "(Shields et al., 1994, p.
-// 121)" so Notes' text-to-speech reads cleanly. Requires a comma directly
-// before the year with only letters/names in between (no digits) so dates
-// like "(Aug 14 / 15, 2026)" are correctly left alone -- a bare "capitalized
-// word + year" check was tried first and false-matched exactly that case.
-// \n is excluded from the body so a match can never span a paragraph break.
+// Strip in-text citations so Notes' text-to-speech reads cleanly.
+// \n is excluded from both bodies so a match can never span a paragraph
+// break.
+//
+// - authorFirstPattern: "(Perosa, 1996)" / "(Shields et al., 1994, p. 121)".
+//   Requires a comma directly before the year with only letters/names in
+//   between (no digits) so dates like "(Aug 14 / 15, 2026)" are correctly
+//   left alone -- a bare "capitalized word + year" check was tried first and
+//   false-matched exactly that case.
+// - narrativePattern: "Erikson (1950/1963, 1968)" / "a "ground plan" (1968,
+//   p. 92)" -- the author is already named in the running prose, so only
+//   year(s)/page(s) are inside the parens. Requires a leading 19xx/20xx year
+//   (so "(Aug 14 / 15, 2026)" still can't match) and caps trailing junk at 4
+//   chars so it only absorbs stray OCR noise immediately before the ")"
+//   (e.g. a misread hyperlink-icon glyph), not an actual word/phrase like
+//   "(2026 release)".
 func stripCitations(_ text: String) -> String {
-    let citationPattern = #"\([A-Z][a-zA-Z.&,\s-]{0,80}?,\s*(?:19|20)\d{2}[a-z]?(?:[^()\n]{0,120})?\)"#
-    guard let regex = try? NSRegularExpression(pattern: citationPattern) else { return text }
-    let fullRange = NSRange(text.startIndex..., in: text)
-    var result = regex.stringByReplacingMatches(in: text, range: fullRange, withTemplate: "")
+    let authorFirstPattern = #"\([A-Z][a-zA-Z.&,\s-]{0,80}?,\s*(?:19|20)\d{2}[a-z]?(?:[^()\n]{0,120})?\)"#
+    let narrativePattern = #"\((?:19|20)\d{2}[a-z]?(?:\s*/\s*(?:19|20)?\d{2}[a-z]?)*(?:\s*,\s*(?:(?:19|20)\d{2}[a-z]?(?:\s*/\s*(?:19|20)?\d{2}[a-z]?)*|p{1,2}\.\s*\d+(?:\s*[-–]\s*\d+)?))*[^()\n]{0,4}\)"#
+
+    var result = text
+    for pattern in [authorFirstPattern, narrativePattern] {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
+        let fullRange = NSRange(result.startIndex..., in: result)
+        result = regex.stringByReplacingMatches(in: result, range: fullRange, withTemplate: "")
+    }
 
     // A removed citation can leave "word  and" (double space) or "word ."
     // (space stranded before punctuation) -- tidy both up.
