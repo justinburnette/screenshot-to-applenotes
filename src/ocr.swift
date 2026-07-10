@@ -153,14 +153,22 @@ for i in 1..<lines.count {
 }
 
 // Strip in-text citations so Notes' text-to-speech reads cleanly.
-// \n is excluded from both bodies so a match can never span a paragraph
+// \n is excluded from all bodies so a match can never span a paragraph
 // break.
 //
-// - authorFirstPattern: "(Perosa, 1996)" / "(Shields et al., 1994, p. 121)".
-//   Requires a comma directly before the year with only letters/names in
-//   between (no digits) so dates like "(Aug 14 / 15, 2026)" are correctly
-//   left alone -- a bare "capitalized word + year" check was tried first and
-//   false-matched exactly that case.
+// - citePrefix: optional "(e.g., " / "(i.e., " lead-in before an author
+//   name. Only used in author-first-shaped patterns -- narrativePattern is
+//   year-first, so allowing a prose prefix there would make it match plain
+//   parenthetical asides instead of citations.
+// - authorFirstPattern: "(Perosa, 1996)" / "(Shields et al., 1994, p. 121)"
+//   / "(e.g., Nurmi, 1991)" / "(Galván, 2020)". Requires a comma directly
+//   before the year with only letters/names in between (no digits) so
+//   dates like "(Aug 14 / 15, 2026)" are correctly left alone -- a bare
+//   "capitalized word + year" check was tried first and false-matched
+//   exactly that case. Uses \p{L}/\p{M} (not a-z) so accented author names
+//   (e.g. "Galván") match -- OCR'd non-ASCII letters can appear as either a
+//   single precomposed codepoint or a base letter + combining accent mark,
+//   and \p{M} covers the latter.
 // - narrativePattern: "Erikson (1950/1963, 1968)" / "a "ground plan" (1968,
 //   p. 92)" -- the author is already named in the running prose, so only
 //   year(s)/page(s) are inside the parens. Requires a leading 19xx/20xx year
@@ -174,13 +182,67 @@ for i in 1..<lines.count {
 //   ")" (only an optional dash-range in between), so it can't accidentally
 //   eat a longer parenthetical that merely starts with "p." for some other
 //   reason.
+// - compoundSemicolonPattern: "(2017; Steinberg & Icenogle, 2019)" -- a
+//   narrative-style bare-year citation followed by one or more "; Author,
+//   Year" continuations in the same parens (shorthand for citing the same
+//   claim across multiple sources). Runs before the simpler patterns since
+//   it must claim the whole span, closing paren included, or those patterns
+//   would otherwise only strip the first segment and strand "; Author,
+//   Year)" behind.
+// - missingParenMidSentenceA/B/C and missingParenEndOfText: some OCR'd
+//   citations never get a detected closing ")" at all -- the source PDF
+//   viewer's inline hyperlink icon after the citation sometimes swallows the
+//   ")" glyph entirely (confirmed via bounding-box dumps: text transitions
+//   directly from the citation into the next sentence, or into end-of-text,
+//   with no ")" observation ever present). Two shapes are handled:
+//     - End of paragraph/string right after the citation: safe to strip
+//       unconditionally (no more text follows, so nothing can be
+//       mistakenly swallowed).
+//     - Mid-sentence (next non-junk char is uppercase, i.e. what looks like
+//       a new sentence starting): this alone is NOT safe, since a real,
+//       complete parenthetical like "(Smith, 2020 Corporation launched a
+//       new program)" would falsely qualify. Two guards are required
+//       together: (1) noNearClose -- no real ")" appears within the next 80
+//       non-paren characters, so a citation that actually does close later
+//       in the same sentence/paragraph is left to the other patterns; (2) a
+//       corroborating signal that this really is a citation, not prose --
+//       either a multi-author marker ("&" / "et al.", branch A), an
+//       "e.g./i.e." lead-in (branch B), or a stray OCR icon-glyph fragment
+//       right after the year (branch C, e.g. the stray "L" the user
+//       reported). A bare "(Smith, 2020 A longitudinal study found..." has
+//       none of these signals and is correctly left alone.
 func stripCitations(_ text: String) -> String {
-    let authorFirstPattern = #"\([A-Z][a-zA-Z.&,\s-]{0,80}?,\s*(?:19|20)\d{2}[a-z]?(?:[^()\n]{0,120})?\)"#
+    let citePrefix = #"(?:(?:e\.g\.|i\.e\.)\s*,\s*)?"#
+    let authorNameBody = #"[\p{L}\p{M}.&,\s'’-]{0,80}?"#
+    let year = #"(?:19|20)\d{2}[a-z]?"#
+    let shortYear = #"(?:19|20)?\d{2}[a-z]?"#
+    let iconJunk = #"(?:[|•·●▪■□◦°]{1,3}|[A-Z]{1,2})"#
+    let strongAuthorSignal = #"(?:&|\bet\s+al\.)"#
+    let noNearClose = #"(?![^()\n]{0,80}\))"#
+
+    let authorFirstPattern = #"\(\#(citePrefix)[\p{Lu}\p{Lt}]\#(authorNameBody),\s*\#(year)(?:[^()\n]{0,120})?\)"#
     let narrativePattern = #"\((?:19|20)\d{2}[a-z]?(?:\s*/\s*(?:19|20)?\d{2}[a-z]?)*(?:\s*,\s*(?:(?:19|20)\d{2}[a-z]?(?:\s*/\s*(?:19|20)?\d{2}[a-z]?)*|p{1,2}\.\s*\d+(?:\s*[-–]\s*\d+)?))*[^()\n]{0,4}\)"#
     let pageOnlyPattern = #"\(p{1,2}\.\s*\d+(?:\s*[-–]\s*\d+)?\)"#
+    let yearCluster = #"\#(year)(?:\s*/\s*\#(shortYear))*"#
+    let authorFirstSegment = #"\#(citePrefix)[\p{Lu}\p{Lt}]\#(authorNameBody),\s*\#(year)(?:\s*,\s*p{1,2}\.\s*\d+(?:\s*[-–]\s*\d+)?)?(?:[^();\n]{0,4})?"#
+    let compoundSemicolonPattern = #"\(\s*\#(yearCluster)(?:[^();\n]{0,4})?(?:\s*;\s*\#(authorFirstSegment)){1,4}\s*\)"#
+    let missingParenEndOfText = #"\(\#(citePrefix)[\p{Lu}\p{Lt}]\#(authorNameBody),\s*\#(year)(?:\s+\#(iconJunk))?(?=[ \t]*(?:\n|\z))"#
+    let missingParenMidSentenceA = #"\(\#(citePrefix)[\p{Lu}\p{Lt}]\#(authorNameBody)\#(strongAuthorSignal)[\p{L}\p{M}.\s'’-]{0,40}?,\s*\#(year)(?:\s+\#(iconJunk))?\#(noNearClose)(?=\s+[\p{Lu}\p{Lt}])"#
+    let missingParenMidSentenceB = #"\((?:e\.g\.|i\.e\.)\s*,\s*[\p{Lu}\p{Lt}]\#(authorNameBody),\s*\#(year)(?:\s+\#(iconJunk))?\#(noNearClose)(?=\s+[\p{Lu}\p{Lt}])"#
+    let missingParenMidSentenceC = #"\([\p{Lu}\p{Lt}]\#(authorNameBody),\s*\#(year)\s+\#(iconJunk)\#(noNearClose)(?=\s+[\p{Lu}\p{Lt}])"#
 
     var result = text
-    for pattern in [authorFirstPattern, narrativePattern, pageOnlyPattern] {
+    let patterns = [
+        compoundSemicolonPattern,
+        missingParenMidSentenceA,
+        missingParenMidSentenceB,
+        missingParenMidSentenceC,
+        missingParenEndOfText,
+        authorFirstPattern,
+        narrativePattern,
+        pageOnlyPattern,
+    ]
+    for pattern in patterns {
         guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
         let fullRange = NSRange(result.startIndex..., in: result)
         result = regex.stringByReplacingMatches(in: result, range: fullRange, withTemplate: "")
