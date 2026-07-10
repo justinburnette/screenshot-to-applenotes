@@ -189,6 +189,14 @@ for i in 1..<lines.count {
 //   it must claim the whole span, closing paren included, or those patterns
 //   would otherwise only strip the first segment and strand "; Author,
 //   Year)" behind.
+// - compoundListPattern: "(e.g., compare Shulman et al., 2016, to Romer et
+//   al., 2017, or Do et al., 2020)" -- like compoundSemicolonPattern, but
+//   the segments are author-first (not bare-year-led) and joined by "to"/
+//   "or"/"and"/";" instead of only ";", with an optional leading "compare "
+//   (seen alongside "e.g.,"). Each segment still requires its own capital
+//   letter + ", year" shape, so a plain aside like "(roughly 2020, or
+//   perhaps 2021)" can't match -- "perhaps" isn't capitalized and has no
+//   ", year" of its own.
 // - missingParenMidSentenceA/B/C and missingParenEndOfText: some OCR'd
 //   citations never get a detected closing ")" at all -- the source PDF
 //   viewer's inline hyperlink icon after the citation sometimes swallows the
@@ -226,6 +234,9 @@ func stripCitations(_ text: String) -> String {
     let yearCluster = #"\#(year)(?:\s*/\s*\#(shortYear))*"#
     let authorFirstSegment = #"\#(citePrefix)[\p{Lu}\p{Lt}]\#(authorNameBody),\s*\#(year)(?:\s*,\s*p{1,2}\.\s*\d+(?:\s*[-–]\s*\d+)?)?(?:[^();\n]{0,4})?"#
     let compoundSemicolonPattern = #"\(\s*\#(yearCluster)(?:[^();\n]{0,4})?(?:\s*;\s*\#(authorFirstSegment)){1,4}\s*\)"#
+    let compareCitePrefix = #"(?:(?:e\.g\.|i\.e\.)\s*,\s*)?(?:compare\s+)?"#
+    let listSep = #"(?:;|,\s*(?:to|or|and))\s*"#
+    let compoundListPattern = #"\(\s*\#(compareCitePrefix)[\p{Lu}\p{Lt}]\#(authorNameBody),\s*\#(year)(?:\s*,\s*p{1,2}\.\s*\d+(?:\s*[-–]\s*\d+)?)?(?:[^();\n]{0,4})?(?:\s*\#(listSep)\#(compareCitePrefix)?[\p{Lu}\p{Lt}]\#(authorNameBody),\s*\#(year)(?:\s*,\s*p{1,2}\.\s*\d+(?:\s*[-–]\s*\d+)?)?(?:[^();\n]{0,4})?){1,5}\s*\)"#
     let missingParenEndOfText = #"\(\#(citePrefix)[\p{Lu}\p{Lt}]\#(authorNameBody),\s*\#(year)(?:\s+\#(iconJunk))?(?=[ \t]*(?:\n|\z))"#
     let missingParenMidSentenceA = #"\(\#(citePrefix)[\p{Lu}\p{Lt}]\#(authorNameBody)\#(strongAuthorSignal)[\p{L}\p{M}.\s'’-]{0,40}?,\s*\#(year)(?:\s+\#(iconJunk))?\#(noNearClose)(?=\s+[\p{Lu}\p{Lt}])"#
     let missingParenMidSentenceB = #"\((?:e\.g\.|i\.e\.)\s*,\s*[\p{Lu}\p{Lt}]\#(authorNameBody),\s*\#(year)(?:\s+\#(iconJunk))?\#(noNearClose)(?=\s+[\p{Lu}\p{Lt}])"#
@@ -233,6 +244,7 @@ func stripCitations(_ text: String) -> String {
 
     var result = text
     let patterns = [
+        compoundListPattern,
         compoundSemicolonPattern,
         missingParenMidSentenceA,
         missingParenMidSentenceB,
