@@ -164,10 +164,30 @@ done < <(printf '%s\n' "${pairs[@]}" | sort -t'|' -k1,1 -n)
 note_title="${title:-Screenshots - $(date +'%b %d, %Y %I:%M %p')}"
 full_text="$note_title"$'\n\n'
 first=true
-echo "Processing ${#sorted_files[@]} screenshot(s) in chronological order:" >&2
+total_files=${#sorted_files[@]}
+echo "Processing ${total_files} screenshot(s) in chronological order:" >&2
+
+# Progress feedback: a bare `osascript` process has no window to render
+# AppleScript's native Progress panel into (it's a property the *host*
+# app -- Script Editor, an applet, Script Monitor -- polls and draws; a
+# plain CLI invocation isn't any of those, so the panel silently never
+# appears, even though setting the properties throws no error). Confirmed
+# via research before landing this: `display notification` has no such
+# host requirement -- it's a one-shot Apple Event straight to Notification
+# Center -- so that's what's used here instead, throttled to every 20th
+# image (plus the first and last) to keep a large batch from flooding
+# Notification Center. Also silently suppressed if Focus/Do Not Disturb is
+# on -- confirmed as the cause the one time this looked broken.
+notify_every=20
+
+files_done=0
 for f in "${sorted_files[@]}"; do
   section="$(extract_text "$f")"
+  files_done=$((files_done + 1))
   echo "  - $(basename "$f")  (${#section} chars extracted)" >&2
+  if (( files_done == 1 || files_done % notify_every == 0 || files_done == total_files )); then
+    osascript -e "display notification \"Read $files_done of $total_files\" with title \"OCR Screenshots to Note\"" >/dev/null 2>&1 || true
+  fi
   if $first; then
     full_text+="$section"
     first=false
