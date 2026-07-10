@@ -224,21 +224,27 @@ on run
 		on error
 			return "NOACCOUNT:iCloud"
 		end try
+		set newNote to missing value
+		set resultTag to ""
 		tell targetAccount
 			if folderName is "" then
-				make new note with properties {body:htmlBody}
-				return "OK:default"
+				set newNote to make new note with properties {body:htmlBody}
+				set resultTag to "OK:default"
+			else
+				try
+					tell folder folderName
+						set newNote to make new note with properties {body:htmlBody}
+					end tell
+					set resultTag to "OK:" & folderName
+				on error
+					set newNote to make new note with properties {body:htmlBody}
+					set resultTag to "FALLBACK:" & folderName
+				end try
 			end if
-			try
-				tell folder folderName
-					make new note with properties {body:htmlBody}
-				end tell
-				return "OK:" & folderName
-			on error
-				make new note with properties {body:htmlBody}
-				return "FALLBACK:" & folderName
-			end try
 		end tell
+		activate
+		show newNote
+		return resultTag
 	end tell
 end run
 APPLESCRIPT
@@ -260,3 +266,5 @@ case "$result" in
   *)
     echo "Note creation returned an unexpected result: $result" >&2 ;;
 esac
+
+osascript -e "display notification \"Created note: $(as_escape "$note_title")\" with title \"OCR Screenshots to Note\" sound name \"Glass\"" >/dev/null 2>&1 || true
