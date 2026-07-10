@@ -118,6 +118,19 @@ Shortcuts-automatable version of Writing Tools now, but it's LLM-based
 (non-deterministic, may rewrite more than intended, requires Apple
 Intelligence to be enabled) and wasn't used here on purpose.
 
+## Progress and note reveal
+
+OCR runs one screenshot at a time, so a large batch can take a while. Since
+a bare `osascript` process has no window to render AppleScript's native
+Progress panel into (that feature is drawn by whatever *hosts* the script --
+Script Editor, a saved applet, Script Monitor -- and a plain CLI invocation
+isn't any of those, so it silently never appears), progress is instead shown
+via Notification Center banners every 20th image, plus a final "done" banner.
+Once the note is created, Notes.app is brought to the front and the new note
+is opened/selected automatically, so you don't have to go find it. If Focus /
+Do Not Disturb is on, macOS suppresses these banners entirely -- turn it off
+if you're not seeing them.
+
 ## Uninstalling
 
 ```
