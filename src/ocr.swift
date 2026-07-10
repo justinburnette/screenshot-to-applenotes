@@ -168,12 +168,19 @@ for i in 1..<lines.count {
 //   chars so it only absorbs stray OCR noise immediately before the ")"
 //   (e.g. a misread hyperlink-icon glyph), not an actual word/phrase like
 //   "(2026 release)".
+// - pageOnlyPattern: "(p. 1011)" / "(pp. 10-12)" -- a follow-up reference to
+//   an author/year already cited earlier in the same paragraph, so neither
+//   appears again here. Requires the number to be the very last thing before
+//   ")" (only an optional dash-range in between), so it can't accidentally
+//   eat a longer parenthetical that merely starts with "p." for some other
+//   reason.
 func stripCitations(_ text: String) -> String {
     let authorFirstPattern = #"\([A-Z][a-zA-Z.&,\s-]{0,80}?,\s*(?:19|20)\d{2}[a-z]?(?:[^()\n]{0,120})?\)"#
     let narrativePattern = #"\((?:19|20)\d{2}[a-z]?(?:\s*/\s*(?:19|20)?\d{2}[a-z]?)*(?:\s*,\s*(?:(?:19|20)\d{2}[a-z]?(?:\s*/\s*(?:19|20)?\d{2}[a-z]?)*|p{1,2}\.\s*\d+(?:\s*[-–]\s*\d+)?))*[^()\n]{0,4}\)"#
+    let pageOnlyPattern = #"\(p{1,2}\.\s*\d+(?:\s*[-–]\s*\d+)?\)"#
 
     var result = text
-    for pattern in [authorFirstPattern, narrativePattern] {
+    for pattern in [authorFirstPattern, narrativePattern, pageOnlyPattern] {
         guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
         let fullRange = NSRange(result.startIndex..., in: result)
         result = regex.stringByReplacingMatches(in: result, range: fullRange, withTemplate: "")
