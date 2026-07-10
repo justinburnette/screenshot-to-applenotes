@@ -197,6 +197,58 @@ for i in 1..<lines.count {
 //   letter + ", year" shape, so a plain aside like "(roughly 2020, or
 //   perhaps 2021)" can't match -- "perhaps" isn't capitalized and has no
 //   ", year" of its own.
+// - compoundSemicolonListPattern / missingCompoundSemicolonListPattern:
+//   "(Bogaerts et al., 2021; Hatano et al., 2022a; Sznitman et al., 2019)"
+//   -- unlike compoundSemicolonPattern, EVERY segment is author-first (no
+//   bare-year lead segment). The OCR icon-glyph problem shows up here in
+//   two ways: (1) trailing junk before a ";" (citationJunk, which now also
+//   allows a lone lowercase "l" -- confirmed via bounding-box dump as a
+//   real OCR misread of the icon glyph in this context) and (2) the ";"
+//   itself sometimes getting swallowed entirely, leaving only whitespace +
+//   a junk glyph between two segments (junkListSep) -- confirmed via
+//   bounding-box dump showing "Stephen et al., 1992" and "Waterman, 1993a"
+//   as two separate same-row OCR fragments with no ";" observation between
+//   them at all. junkListSep still requires the next segment to start with
+//   a capital letter, so it can't fire on ordinary prose. The missing-close
+//   variant reuses noNearClose; no extra corroboration signal (et al./&) is
+//   required beyond 2+ valid "Author, Year" segments, since that structure
+//   is already distinctive enough on its own (unlike the single-citation
+//   missing-paren patterns, which need it to rule out one-off false
+//   positives like "(Smith, 2020 Corporation launched...)").
+// - acronymCitationPattern: "(IPT; Klerman et al., 1984, see Chapter 11)"
+//   -> "(IPT)". Unlike every other pattern, this one keeps part of its
+//   match (the acronym) via a capture-group replacement template instead of
+//   deleting outright -- the acronym is real reader content (it's the
+//   short name the surrounding prose keeps referring back to), only the
+//   citation trailing it should go. Runs as a separate first pass, before
+//   the deletion patterns, so by the time compoundSemicolonListPattern
+//   etc. run, "(IPT; Klerman et al., 1984...)" has already become "(IPT)"
+//   and won't be touched again. acronymBody allows internal hyphens/digits
+//   (e.g. "MB-EAT") since some program-name acronyms include them.
+//   acronymCitationMissingParen mirrors this for the same OCR icon-glyph
+//   paren-swallowing problem as the other missing-paren patterns, but the
+//   continuation here is usually mid-sentence lowercase prose (e.g.
+//   "(MB-EAT; Kristeller & Hallett, 1999 is a group treatment..."), not a
+//   new capitalized sentence, so its lookahead also accepts a lowercase
+//   word. Its trailing-junk allowance is limited to icon-glyph chars only
+//   (no generic multi-char buffer like the real-close-paren variant) --
+//   an early version used the same generic buffer and it silently ate part
+//   of the following sentence before finding a lookahead match further in.
+// - namePart: optional lowercase name-particle prefix ("van", "de la",
+//   "von", etc.) before the required capital letter, so names like "van de
+//   Bongardt" or "Mac Donald" aren't rejected for not starting with a
+//   capital. Requires the particle to be one of a fixed, known list (not
+//   just "any lowercase word") so ordinary prose like "the van drove away
+//   (Smith, 2020)" can't have "van" misread as part of the citation.
+// - citePrefix/compareCitePrefix also accept a "see " lead-in now (e.g.
+//   "(see Piaget & Inhelder, 1951/1976)"), alongside "e.g."/"i.e.". A
+//   trailing comma after these lead-ins is now optional (some are written
+//   "see Author" with no comma at all), which also fixes "(see Figure
+//   9.2)" being left alone since "Figure" isn't followed by ", year".
+// - missingParenEndOfText's optional trailing icon-junk no longer requires
+//   a space before it -- OCR sometimes glues the junk glyph directly onto
+//   the year with no space at all (e.g. "(Skoog et al., 2016|" at a
+//   paragraph break).
 // - missingParenMidSentenceA/B/C and missingParenEndOfText: some OCR'd
 //   citations never get a detected closing ")" at all -- the source PDF
 //   viewer's inline hyperlink icon after the citation sometimes swallows the
@@ -218,9 +270,20 @@ for i in 1..<lines.count {
 //       "e.g./i.e." lead-in (branch B), or a stray OCR icon-glyph fragment
 //       right after the year (branch C, e.g. the stray "L" the user
 //       reported). A bare "(Smith, 2020 A longitudinal study found..." has
-//       none of these signals and is correctly left alone.
+//       none of these signals and is correctly left alone. The "next thing
+//       looks like a new sentence" lookahead requires 2+ letters (not a
+//       lone capital) -- a single stray junk letter immediately followed by
+//       a same-author continuation year, e.g. "(Brody et al., 2014 L,
+//       2018", was previously misread as "L" starting a new sentence,
+//       causing the pattern to stop short and strand ", 2018" behind
+//       (caught via bounding-box verification against the real image,
+//       where the citation continues onto a second, same-author year with
+//       no closing paren ever detected -- handled by yearContinuation
+//       below, allowing missingParenEndOfText to absorb any number of
+//       repeated ", year" segments before reaching end of text).
 func stripCitations(_ text: String) -> String {
-    let citePrefix = #"(?:(?:e\.g\.|i\.e\.)\s*,\s*)?"#
+    let citePrefix = #"(?:(?:e\.g\.|i\.e\.|see)\s*,?\s*)?"#
+    let namePart = #"(?:(?:van|von|de|der|den|du|la|le|Mc|Mac)\s+)*"#
     let authorNameBody = #"[\p{L}\p{M}.&,\s'’-]{0,80}?"#
     let year = #"(?:19|20)\d{2}[a-z]?"#
     let shortYear = #"(?:19|20)?\d{2}[a-z]?"#
@@ -228,24 +291,58 @@ func stripCitations(_ text: String) -> String {
     let strongAuthorSignal = #"(?:&|\bet\s+al\.)"#
     let noNearClose = #"(?![^()\n]{0,80}\))"#
 
-    let authorFirstPattern = #"\(\#(citePrefix)[\p{Lu}\p{Lt}]\#(authorNameBody),\s*\#(year)(?:[^()\n]{0,120})?\)"#
+    let authorFirstPattern = #"\(\#(citePrefix)\#(namePart)[\p{Lu}\p{Lt}]\#(authorNameBody),\s*\#(year)(?:[^()\n]{0,120})?\)"#
     let narrativePattern = #"\((?:19|20)\d{2}[a-z]?(?:\s*/\s*(?:19|20)?\d{2}[a-z]?)*(?:\s*,\s*(?:(?:19|20)\d{2}[a-z]?(?:\s*/\s*(?:19|20)?\d{2}[a-z]?)*|p{1,2}\.\s*\d+(?:\s*[-–]\s*\d+)?))*[^()\n]{0,4}\)"#
     let pageOnlyPattern = #"\(p{1,2}\.\s*\d+(?:\s*[-–]\s*\d+)?\)"#
     let yearCluster = #"\#(year)(?:\s*/\s*\#(shortYear))*"#
-    let authorFirstSegment = #"\#(citePrefix)[\p{Lu}\p{Lt}]\#(authorNameBody),\s*\#(year)(?:\s*,\s*p{1,2}\.\s*\d+(?:\s*[-–]\s*\d+)?)?(?:[^();\n]{0,4})?"#
+    let authorFirstSegment = #"\#(citePrefix)\#(namePart)[\p{Lu}\p{Lt}]\#(authorNameBody),\s*\#(year)(?:\s*,\s*p{1,2}\.\s*\d+(?:\s*[-–]\s*\d+)?)?(?:[^();\n]{0,4})?"#
     let compoundSemicolonPattern = #"\(\s*\#(yearCluster)(?:[^();\n]{0,4})?(?:\s*;\s*\#(authorFirstSegment)){1,4}\s*\)"#
-    let compareCitePrefix = #"(?:(?:e\.g\.|i\.e\.)\s*,\s*)?(?:compare\s+)?"#
+    let compareCitePrefix = #"(?:(?:e\.g\.|i\.e\.|see)\s*,?\s*)?(?:compare\s+)?"#
     let listSep = #"(?:;|,\s*(?:to|or|and))\s*"#
-    let compoundListPattern = #"\(\s*\#(compareCitePrefix)[\p{Lu}\p{Lt}]\#(authorNameBody),\s*\#(year)(?:\s*,\s*p{1,2}\.\s*\d+(?:\s*[-–]\s*\d+)?)?(?:[^();\n]{0,4})?(?:\s*\#(listSep)\#(compareCitePrefix)?[\p{Lu}\p{Lt}]\#(authorNameBody),\s*\#(year)(?:\s*,\s*p{1,2}\.\s*\d+(?:\s*[-–]\s*\d+)?)?(?:[^();\n]{0,4})?){1,5}\s*\)"#
-    let missingParenEndOfText = #"\(\#(citePrefix)[\p{Lu}\p{Lt}]\#(authorNameBody),\s*\#(year)(?:\s+\#(iconJunk))?(?=[ \t]*(?:\n|\z))"#
-    let missingParenMidSentenceA = #"\(\#(citePrefix)[\p{Lu}\p{Lt}]\#(authorNameBody)\#(strongAuthorSignal)[\p{L}\p{M}.\s'’-]{0,40}?,\s*\#(year)(?:\s+\#(iconJunk))?\#(noNearClose)(?=\s+[\p{Lu}\p{Lt}])"#
-    let missingParenMidSentenceB = #"\((?:e\.g\.|i\.e\.)\s*,\s*[\p{Lu}\p{Lt}]\#(authorNameBody),\s*\#(year)(?:\s+\#(iconJunk))?\#(noNearClose)(?=\s+[\p{Lu}\p{Lt}])"#
-    let missingParenMidSentenceC = #"\([\p{Lu}\p{Lt}]\#(authorNameBody),\s*\#(year)\s+\#(iconJunk)\#(noNearClose)(?=\s+[\p{Lu}\p{Lt}])"#
+    let compoundListPattern = #"\(\s*\#(compareCitePrefix)\#(namePart)[\p{Lu}\p{Lt}]\#(authorNameBody),\s*\#(year)(?:\s*,\s*p{1,2}\.\s*\d+(?:\s*[-–]\s*\d+)?)?(?:[^();\n]{0,4})?(?:\s*\#(listSep)\#(compareCitePrefix)?\#(namePart)[\p{Lu}\p{Lt}]\#(authorNameBody),\s*\#(year)(?:\s*,\s*p{1,2}\.\s*\d+(?:\s*[-–]\s*\d+)?)?(?:[^();\n]{0,4})?){1,5}\s*\)"#
+    let yearContinuation = #"(?:\s*\#(iconJunk)?\s*,\s*\#(year))*"#
+    let missingParenEndOfText = #"\(\#(citePrefix)\#(namePart)[\p{Lu}\p{Lt}]\#(authorNameBody),\s*\#(year)\#(yearContinuation)(?:\s*\#(iconJunk))?(?=[ \t]*(?:\n|\z))"#
+    let missingParenMidSentenceA = #"\(\#(citePrefix)\#(namePart)[\p{Lu}\p{Lt}]\#(authorNameBody)\#(strongAuthorSignal)[\p{L}\p{M}.\s'’-]{0,40}?,\s*\#(year)(?:\s+\#(iconJunk))?\#(noNearClose)(?=\s+[\p{Lu}\p{Lt}][\p{L}\p{M}])"#
+    let missingParenMidSentenceB = #"\((?:e\.g\.|i\.e\.)\s*,\s*\#(namePart)[\p{Lu}\p{Lt}]\#(authorNameBody),\s*\#(year)(?:\s+\#(iconJunk))?\#(noNearClose)(?=\s+[\p{Lu}\p{Lt}][\p{L}\p{M}])"#
+    let missingParenMidSentenceC = #"\(\#(namePart)[\p{Lu}\p{Lt}]\#(authorNameBody),\s*\#(year)\s+\#(iconJunk)\#(noNearClose)(?=\s+[\p{Lu}\p{Lt}][\p{L}\p{M}])"#
+    let citationJunk = #"(?:[|•·●▪■□◦°]{1,3}|[A-Z]{1,2}|l)"#
+    let authorFirstListSegment = #"\#(compareCitePrefix)\#(namePart)[\p{Lu}\p{Lt}]\#(authorNameBody),\s*\#(year)(?:\s*,\s*p{1,2}\.\s*\d+(?:\s*[-–]\s*\d+)?)?"#
+    let semicolonAhead = #"(?=[^()\n]{0,240};)"#
+    let semiListSep = #"\s*(?:\#(citationJunk)\s*){0,2};\s*"#
+    let junkListSep = #"\s+\#(citationJunk)\s+(?=[\p{Lu}\p{Lt}])"#
+    let flexListSep = #"(?:\#(semiListSep)|\#(junkListSep))"#
+    let citationTailJunk = #"(?:\s+\#(citationJunk)){0,2}(?:[^();\n]{0,4})?"#
+    let compoundSemicolonListPattern = #"\(\s*\#(semicolonAhead)\#(authorFirstListSegment)(?:\#(flexListSep)\#(authorFirstListSegment)){1,5}\#(citationTailJunk)\s*\)"#
+    let missingCompoundSemicolonListPattern = #"\(\s*\#(semicolonAhead)\#(authorFirstListSegment)(?:\#(flexListSep)\#(authorFirstListSegment)){1,5}\#(citationTailJunk)\#(noNearClose)(?=\s+[\p{Lu}\p{Lt}][\p{L}\p{M}])"#
+    // Same missing-close-paren list shape as above, but the paragraph ends
+    // (or the screenshot's visible text is cut off) right after the last
+    // segment instead of continuing into a new sentence -- confirmed via a
+    // real image where a citation list is the very last thing OCR'd with
+    // no ")" ever detected.
+    let compoundSemicolonListEndOfText = #"\(\s*\#(semicolonAhead)\#(authorFirstListSegment)(?:\#(flexListSep)\#(authorFirstListSegment)){1,5}\#(citationTailJunk)(?=[ \t]*(?:\n|\z))"#
+    let acronymBody = #"[A-Z][A-Z0-9-]{1,7}"#
+    let acronymCitationPattern = #"\((\#(acronymBody)(?:\([^()\n]{1,40}\))?)\s*;\s*\#(authorFirstListSegment)(?:\#(flexListSep)\#(authorFirstListSegment)){0,5}(?:[^()\n]{0,80})?\)"#
+    let acronymTailJunk = #"(?:\s*\#(citationJunk)){0,2}"#
+    let acronymCitationMissingParen = #"\((\#(acronymBody))\s*;\s*\#(authorFirstListSegment)(?:\#(flexListSep)\#(authorFirstListSegment)){0,5}\#(acronymTailJunk)\#(noNearClose)(?=\s+[a-z]|\s+[\p{Lu}\p{Lt}][\p{L}\p{M}]|[ \t]*(?:\n|\z))"#
 
+    // Acronym-preserving pass runs first and keeps the acronym via $1
+    // instead of deleting the whole match, so by the time the deletion
+    // patterns below run, "(IPT; Klerman et al., 1984)" is already "(IPT)"
+    // and can't be touched again.
     var result = text
+    for acronymPattern in [acronymCitationPattern, acronymCitationMissingParen] {
+        if let acronymRegex = try? NSRegularExpression(pattern: acronymPattern) {
+            let fullRange = NSRange(result.startIndex..., in: result)
+            result = acronymRegex.stringByReplacingMatches(in: result, range: fullRange, withTemplate: "($1)")
+        }
+    }
+
     let patterns = [
+        compoundSemicolonListPattern,
         compoundListPattern,
         compoundSemicolonPattern,
+        missingCompoundSemicolonListPattern,
+        compoundSemicolonListEndOfText,
         missingParenMidSentenceA,
         missingParenMidSentenceB,
         missingParenMidSentenceC,
