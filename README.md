@@ -7,11 +7,11 @@ so Notes' text-to-speech ("Speak") reads it back cleanly.
 
 <img width="775" height="555" alt="image" src="https://github.com/user-attachments/assets/c920e26a-6213-4821-807a-059ddfcf2016" />
 
+## If you need help, you could use your favorite AI tool and copy and paste this webpage and ask it how to install and use this tool.
 
 ## Requirements
 
-- A Mac signed into iCloud with Notes syncing on (Notes > Settings > Accounts).
-  Notes are always created in the account literally named "iCloud".
+- A Mac. Notes are always created in the account literally named "iCloud".
 - Xcode Command Line Tools, for the `swiftc` compiler:
   ```
   xcode-select --install
@@ -40,6 +40,7 @@ The first run will:
 If "OCR Screenshots to Note" doesn't show up in the Quick Actions submenu right
 away, check System Settings > Keyboard > Keyboard Shortcuts > Services (or
 Extensions > Finder) and make sure it's enabled there.
+
 
 ## Files
 
