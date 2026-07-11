@@ -1,4 +1,4 @@
-# screen-reader (Screenshot OCR to Apple Notes - Use Siri voice to read)
+# screenshot-to-applenotes (Screenshot OCR to Apple Notes - Use Siri voice to read)
 
 Take screenshots of anything you want to process or read! The mac shortcut for screenshots is **Command+Shift+4** then it autosaves to your mac desktop (or change location with **Command+Shift+5**.
 
@@ -23,8 +23,8 @@ so Notes' text-to-speech ("Speak") reads it back cleanly.
 ## Quick start
 
 ```
-git clone git@github.com:justinburnette/screen-reader.git
-cd screen-reader
+git clone git@github.com:justinburnette/screenshot-to-applenotes.git
+cd screenshot-to-applenotes
 ./quickaction/install.sh
 ```
 
