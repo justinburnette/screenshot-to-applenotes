@@ -4,7 +4,7 @@ Select one or more screenshots in Finder, right-click, and get their text
 OCR'd into a single new Apple Note -- in chronological order by capture time,
 reflowed into readable paragraphs, with academic-style citations stripped out
 so Notes' text-to-speech ("Speak") reads it back cleanly.
-<img width="722" height="599" alt="image" src="https://github.com/user-attachments/assets/fded2650-379a-4854-9d3e-d5599dfb00df" />
+<img width="785" height="559" alt="image" src="https://github.com/user-attachments/assets/46f6f154-0d99-4644-99f8-a7f51f749863" />
 
 
 ## Requirements
