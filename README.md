@@ -5,7 +5,7 @@ OCR'd into a single new Apple Note -- in chronological order by capture time,
 reflowed into readable paragraphs, with academic-style citations stripped out
 so Notes' text-to-speech ("Speak") reads it back cleanly.
 
-<img width="727" height="551" alt="image" src="https://github.com/user-attachments/assets/dbd381cd-1820-4b39-88c5-5886c74221ad" />
+<img width="775" height="555" alt="image" src="https://github.com/user-attachments/assets/c920e26a-6213-4821-807a-059ddfcf2016" />
 
 
 ## Requirements
