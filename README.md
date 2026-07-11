@@ -1,6 +1,6 @@
-# screen-reader
+# screen-reader (Screenshot OCR to Apple Notes - Then use Siri voice to read)
 
-Take screenshots of anything you want to process or read!
+Take screenshots of anything you want to process or read! The mac shortcut for screenshots is **Shift+Command+4** then it autosaves to your mac.
 
 Select one or more screenshots in Finder, right-click, and get their text
 OCR'd into a single new Apple Note -- in chronological order by capture time,
@@ -41,7 +41,9 @@ If "OCR Screenshots to Note" doesn't show up in the Quick Actions submenu right
 away, check System Settings > Keyboard > Keyboard Shortcuts > Services (or
 Extensions > Finder) and make sure it's enabled there.
 
-Use mac's Siri reader for the best experience. System Settings > Accessibility > Read & Speak > System Voice > Siri
+In Apple Notes, select all (Command+a) then right-click and select **Speech > Start Speaking**
+
+Use mac's Siri reader for the best experience. **System Settings > Accessibility > Read & Speak > Speak selection = ON; also System Voice > Siri**
 
 <img width="473" height="480" alt="image" src="https://github.com/user-attachments/assets/f59c5a58-055a-4220-a172-0489d203c61d" />
 
