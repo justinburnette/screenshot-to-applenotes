@@ -1,13 +1,13 @@
 # screen-reader
 
+Take screenshots of anything you want to process or read!
+
 Select one or more screenshots in Finder, right-click, and get their text
 OCR'd into a single new Apple Note -- in chronological order by capture time,
 reflowed into readable paragraphs, with academic-style citations stripped out
 so Notes' text-to-speech ("Speak") reads it back cleanly.
 
 <img width="775" height="555" alt="image" src="https://github.com/user-attachments/assets/c920e26a-6213-4821-807a-059ddfcf2016" />
-
-## If you need help, you could use your favorite AI tool and copy and paste this webpage and ask it how to install and use this tool.
 
 ## Requirements
 
@@ -41,6 +41,12 @@ If "OCR Screenshots to Note" doesn't show up in the Quick Actions submenu right
 away, check System Settings > Keyboard > Keyboard Shortcuts > Services (or
 Extensions > Finder) and make sure it's enabled there.
 
+Use mac's Siri reader for the best experience. System Settings > Accessibility > Read & Speak > System Voice > Siri
+
+<img width="473" height="480" alt="image" src="https://github.com/user-attachments/assets/f59c5a58-055a-4220-a172-0489d203c61d" />
+
+
+## If you need help, you could use your favorite AI tool and copy and paste this webpage and ask it how to install and use this tool.
 
 ## Files
 
