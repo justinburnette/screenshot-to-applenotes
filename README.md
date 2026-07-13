@@ -32,6 +32,7 @@ so Notes' text-to-speech ("Speak") reads it back cleanly.
    **Install.command** and choose **Open** instead of double-clicking, then
    confirm. You only need to do this once.
 4. A Terminal window runs the installer and closes when done.
+5. Enable Accessibility setting "Speak Selection" with Siri voice (see below)
 
 ## Install from source
 
@@ -55,6 +56,8 @@ away, check System Settings > Keyboard > Keyboard Shortcuts > Services (or
 Extensions > Finder) and make sure it's enabled there.
 
 In Apple Notes, select all (Command+a) then right-click and select **Speech > Start Speaking**
+
+## Enable Accessibility setting "Speak Selection"
 
 Use mac's Siri reader for the best experience. **System Settings > Accessibility > Read & Speak > Speak selection = ON; also System Voice > Siri**
 
