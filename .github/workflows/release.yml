@@ -1,0 +1,25 @@
+name: Release DMG
+
+# Builds dist/make_dmg.sh on a macOS runner and attaches the resulting .dmg
+# to the GitHub Release for the pushed tag. Only triggers on version tags
+# (vX.Y.Z) so ordinary commits/pushes never kick off a build.
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-and-release:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build DMG
+        run: ./dist/make_dmg.sh "${{ github.ref_name }}"
+
+      - name: Attach DMG to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/out/*.dmg
