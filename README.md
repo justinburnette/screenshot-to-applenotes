@@ -12,15 +12,28 @@ so Notes' text-to-speech ("Speak") reads it back cleanly.
 ## Requirements
 
 - A Mac. Notes are always created in the account literally named "iCloud".
-- Xcode Command Line Tools, for the `swiftc` compiler:
+- Nothing else if you use the DMG download below. If installing from
+  source instead, you'll also need Xcode Command Line Tools for the
+  `swiftc` compiler:
   ```
   xcode-select --install
   ```
   (If `xcode-select -p` already prints a path, you have it.)
-- Nothing else. OCR runs entirely on-device via Apple's Vision framework --
-  no Tesseract, no Python, no network calls, no App Store app.
+- OCR runs entirely on-device via Apple's Vision framework -- no
+  Tesseract, no Python, no network calls, no App Store app.
 
-## Quick start
+## Download (no git or Terminal commands required)
+
+1. Download the latest `.dmg` from the
+   [Releases page](https://github.com/justinburnette/screenshot-to-applenotes/releases/latest).
+2. Open the DMG, then double-click **Install.command** inside it.
+3. macOS will warn that it's from an unidentified developer (this project
+   isn't signed with a paid Apple Developer certificate) -- right-click
+   **Install.command** and choose **Open** instead of double-clicking, then
+   confirm. You only need to do this once.
+4. A Terminal window runs the installer and closes when done.
+
+## Install from source
 
 ```
 git clone git@github.com:justinburnette/screenshot-to-applenotes.git
@@ -67,6 +80,14 @@ Use mac's Siri reader for the best experience. **System Settings > Accessibility
 - `quickaction/install.sh` -- copies the Quick Action into
   `~/Library/Services` (with the real path substituted in) so it shows up in
   Finder's right-click menu.
+- `dist/make_dmg.sh` -- builds the release `.dmg`: compiles a universal
+  (Apple Silicon + Intel) `bin/ocr` and bundles it with the Quick Action,
+  scripts, and `dist/Install.command` so the DMG needs no compiler at all.
+  Runs automatically via `.github/workflows/release.yml` on every `v*` tag
+  push; can also be run locally (`./dist/make_dmg.sh 1.0.0`).
+- `dist/Install.command` -- the double-clickable installer inside the DMG
+  (Finder runs `.command` files in Terminal automatically). Just calls
+  `quickaction/install.sh`.
 
 If you move the cloned repo folder after installing, re-run
 `./quickaction/install.sh` so the Quick Action picks up the new location.
