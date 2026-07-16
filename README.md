@@ -1,6 +1,6 @@
 # screenshot-to-applenotes (Screenshot OCR to Apple Notes - Use Siri voice to read)
 
-Take screenshots of anything you want to process or read! The mac shortcut for screenshots is **Command+Shift+4** then it autosaves to your mac desktop (or change location with **Command+Shift+5**.
+Take screenshots of anything you want to process or read! The mac shortcut for screenshots is **Command+Shift+4** then it autosaves to your mac desktop (or change location with **Command+Shift+5** ).
 
 Select one or more screenshots in Finder, right-click, and get their text
 OCR'd into a single new Apple Note -- in chronological order by capture time,
